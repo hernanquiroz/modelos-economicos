@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EconoBoard Pro - Pizarra de Economía</title>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --panel-bg: #2b2b2b;
+            --canvas-bg: #f8f9fa;
+            --accent-color: #007bff;
+            --text-color: #ffffff;
+            --krugman-blue: #0d6efd;
+            --krugman-red: #dc3545;
+            --krugman-green: #198754;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-user-select: none;
+            -moz-user-select: none;
+            -ms-user-select: none;
+            user-select: none;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            height: 100vh;
+            overflow: hidden;
+            display: grid;
+            grid-template-columns: 220px 1fr 300px;
+            grid-template-rows: 1fr 60px;
+            gap: 5px;
+            padding: 5px;
+        }
+
+        /* Paneles Laterales */
+        .panel {
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            padding: 15px;
+            overflow-y: auto;
+        }
+
+        .panel h3 {
+            font-size: 1rem;
+            margin-bottom: 15px;
+            border-bottom: 1px solid #444;
+            padding-bottom: 5px;
+        }
+
+        .model-btn {
+            display: block;
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 10px;
+            background-color: #3a3a3a;
+            color: #fff;
+            border: 1px solid #555;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            text-align: left;
+            transition: background 0.2s;
+        }
+
+        .model-btn:hover { background-color: #4a4a4a; }
+        .model-btn.active { background-color: var(--accent-color); border-color: var(--accent-color); }
+
+        /* Centro (Lienzo) */
+        .canvas-container {
+            position: relative;
+            background-color: var(--canvas-bg);
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        #drawCanvas {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 10;
+            cursor: crosshair;
+            touch-action: none; /* Crucial para lapiz óptico y táctil */
+        }
+
+        #graphContainer {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1;
+        }
+
+        /* --- NUEVO: Barra de Herramientas de Escritura --- */
+        #drawingToolbar {
+            position: absolute;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            background: rgba(40, 40, 40, 0.9);
+            padding: 8px;
+            border-radius: 30px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+        }
+
+        .tool-btn {
+            width: 34px;
+            height: 34px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            color: white;
+            background: #555;
+            transition: 0.2s;
+        }
+
+        .tool-btn.active { border-color: #fff; transform: scale(1.1); }
+        .tool-btn:hover { background: #777; }
+
+        .color-black { background: #000; }
+        .color-red { background: #dc3545; }
+        .color-blue { background: #0d6efd; }
+        .color-highlighter { background: #ffeb3b; color: #000; }
+        .tool-eraser { background: #fff; color: #000; } /* Icono de borrador */
+
+        /* Controles Derecha */
+        .control-group {
+            margin-bottom: 20px;
+            display: none; /* Oculto por defecto */
+        }
+        .control-group.active { display: block; }
+
+        .slider-container { margin-bottom: 15px; }
+        .slider-container label {
+            display: block;
+            font-size: 0.85rem;
+            margin-bottom: 5px;
+            color: #ccc;
+        }
+        .slider-container input[type="range"] {
+            width: 100%;
+            cursor: pointer;
+        }
+        .slider-value { font-weight: bold; color: var(--accent-color); }
+
+        .action-btn {
+            width: 100%;
+            padding: 10px;
+            background-color: var(--krugman-red);
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+
+        /* Barra Inferior (Grabación) */
+        .footer-bar {
+            grid-column: 1 / 4;
+            background-color: var(--panel-bg);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            padding: 0 20px;
+        }
+
+        #recBtn {
+            width: 50px; height: 50px;
+            border-radius: 50%;
+            background-color: #444;
+            border: 3px solid #fff;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex; align-items: center; justify-content: center;
+        }
+
+        #recBtn.recording {
+            background-color: var(--krugman-red);
+            animation: pulse 1.5s infinite;
+        }
+
+        #recIcon { width: 20px; height: 20px; background-color: #fff; border-radius: 50%; }
+        #recBtn.recording #recIcon { border-radius: 5px; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7); }
+            70% { box-shadow: 0 0 0 15px rgba(220, 53, 69, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(220, 53, 69, 0); }
+        }
+
+        .footer-text { font-size: 0.9rem; color: #aaa; }
+        .marker-btn {
+            padding: 8px 15px; background-color: #3a3a3a;
+            border: 1px solid #555; color: white;
+            border-radius: 5px; cursor: pointer;
+        }
+
+        /* Estilos del SVG del Modelo de Krugman */
+        .axis { stroke: #333; stroke-width: 2; }
+        .axis-label { fill: #333; font-size: 14px; font-weight: bold; }
+        .grid-line { stroke: #ddd; stroke-width: 1; stroke-dasharray: 4; }
+        .line-45 { stroke: #999; stroke-width: 2; stroke-dasharray: 6; }
+        .band-line { stroke: var(--krugman-red); stroke-width: 2; stroke-dasharray: 4; }
+        .krugman-curve { stroke: var(--krugman-blue); stroke-width: 4; fill: none; }
+        .equilibrium-point { fill: var(--krugman-green); stroke: #000; stroke-width: 1; }
+    </style>
+</head>
+<body>
+
+    <!-- Panel Izquierdo: Modelos -->
+    <aside class="panel">
+        <h3>Modelos Económicos</h3>
+        <button class="model-btn" onclick="selectModel('none')">Lienzo en Blanco</button>
+        <button class="model-btn" onclick="selectModel('supply-demand')">Oferta y Demanda</button>
+        <button class="model-btn" onclick="selectModel('is-lm')">Modelo IS-LM</button>
+        <button class="model-btn active" onclick="selectModel('krugman')">Krugman (Mercado de Activos)</button>
+    </aside>
+
+    <!-- Centro: Pizarra y Gráficos -->
+    <main class="canvas-container">
+        
+        <!-- NUEVO: Barra de herramientas para escribir -->
+        <div id="drawingToolbar">
+            <div class="tool-btn color-black active" onclick="setTool('pen', '#000', 3, this)" title="Lápiz Negro">✎</div>
+            <div class="tool-btn color-red" onclick="setTool('pen', '#dc3545', 3, this)" title="Lápiz Rojo">✎</div>
+            <div class="tool-btn color-blue" onclick="setTool('pen', '#0d6efd', 3, this)" title="Lápiz Azul">✎</div>
+            <div class="tool-btn color-highlighter" onclick="setTool('highlighter', 'rgba(255, 235, 59, 0.4)', 15, this)" title="Resaltador">HZ</div>
+            <div class="tool-btn tool-eraser" onclick="setTool('eraser', '#000', 25, this)" title="Borrador">⌫</div>
+        </div>
+
+        <div id="graphContainer">
+            <svg id="krugmanSvg" width="600" height="500" viewBox="0 0 600 500" style="display:block;">
+                <line class="axis" x1="50" y1="450" x2="550" y2="450" />
+                <line class="axis" x1="50" y1="450" x2="50" y2="50" />
+                <text class="axis-label" x="300" y="485" text-anchor="middle">Fundamentales (m)</text>
+                <text class="axis-label" x="15" y="250" text-anchor="middle" transform="rotate(-90 15 250)">Tipo de Cambio (e)</text>
+                
+                <line id="bandSup" class="band-line" x1="50" y1="100" x2="550" y2="100" />
+                <line id="bandInf" class="band-line" x1="50" y1="400" x2="550" y2="400" />
+                <line id="line45" class="line-45" x1="50" y1="450" x2="450" y2="50" />
+                
+                <path id="krugmanPath" class="krugman-curve" d="M 50 450 C 150 450, 250 250, 300 250 S 450 50, 550 50" />
+                <circle id="eqPoint" class="equilibrium-point" cx="300" cy="250" r="8" />
+            </svg>
+        </div>
+        
+        <!-- Lienzo transparente superpuesto para escribir -->
+        <canvas id="drawCanvas"></canvas>
+    </main>
+
+    <!-- Panel Derecho: Controles -->
+    <aside class="panel">
+        <h3>Panel de Control</h3>
+        
+        <div id="krugman-controls" class="control-group active">
+            <div class="slider-container">
+                <label>Banda Superior (e_max): <span id="supVal" class="slider-value">100</span></label>
+                <input type="range" id="bandSupSlider" min="50" max="200" value="100" oninput="updateKrugman()">
+            </div>
+            <div class="slider-container">
+                <label>Banda Inferior (e_min): <span id="infVal" class="slider-value">400</span></label>
+                <input type="range" id="bandInfSlider" min="300" max="450" value="400" oninput="updateKrugman()">
+            </div>
+            <div class="slider-container">
+                <label>Fundamentales (m): <span id="fundVal" class="slider-value">300</span></label>
+                <input type="range" id="fundSlider" min="50" max="550" value="300" oninput="updateKrugman()">
+            </div>
+            <button class="action-btn" onclick="triggerCrisis()">Simular Crisis de Balance</button>
+        </div>
+    </aside>
+
+    <!-- Barra Inferior: Grabación -->
+    <footer class="footer-bar">
+        <button id="recBtn" onclick="toggleRecording()">
+            <div id="recIcon"></div>
+        </button>
+        <div class="footer-text" id="recStatus">Listo para grabar</div>
+        <button class="marker-btn" onclick="addMarker()">+ Marcar Capítulo</button>
+        <button class="marker-btn" onclick="clearCanvas()">Limpiar Tinta</button>
+    </footer>
+
+    <script>
+        // --- Lógica del Lienzo (Dibujo a mano alzada) ---
+        const canvas = document.getElementById('drawCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        // Variables de herramienta actual
+        let currentTool = 'pen';
+        let currentColor = '#000';
+        let currentSize = 3;
+
+        function resizeCanvas() {
+            // Guardar el dibujo actual antes de redimensionar
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = canvas.width;
+            tempCanvas.height = canvas.height;
+            tempCanvas.getContext('2d').drawImage(canvas, 0, 0);
+
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+
+            // Restaurar el dibujo
+            ctx.drawImage(tempCanvas, 0, 0);
+        }
+        window.addEventListener('resize', resizeCanvas);
+        
+        // Inicializar canvas correctamente
+        setTimeout(resizeCanvas, 100);
+
+        function setTool(tool, color, size, element) {
+            currentTool = tool;
+            currentColor = color;
+            currentSize = size;
+
+            // Actualizar UI activa
+            document.querySelectorAll('.tool-btn').forEach(btn => btn.classList.remove('active'));
+            element.classList.add('active');
+        }
+
+        // Soporte para Lápiz Óptico, Táctil y Ratón (Pointer Events)
+        canvas.addEventListener('pointerdown', (e) => {
+            isDrawing = true;
+            canvas.setPointerCapture(e.pointerId);
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+        });
+
+        canvas.addEventListener('pointermove', (e) => {
+            if (!isDrawing) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(x, y);
+            
+            if (currentTool === 'eraser') {
+                ctx.globalCompositeOperation = 'destination-out'; // Borra lo que hay debajo
+                ctx.strokeStyle = 'rgba(0,0,0,1)';
+                ctx.lineWidth = currentSize;
+            } else if (currentTool === 'highlighter') {
+                ctx.globalCompositeOperation = 'source-over'; // Superpone
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            } else {
+                ctx.globalCompositeOperation = 'source-over'; // Lápiz normal
+                ctx.strokeStyle = currentColor;
+                ctx.lineWidth = currentSize;
+            }
+            
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.stroke();
+            
+            lastX = x;
+            lastY = y;
+        });
+
+        canvas.addEventListener('pointerup', (e) => { isDrawing = false; });
+        canvas.addEventListener('pointercancel', (e) => { isDrawing = false; });
+
+        function clearCanvas() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- Lógica de Selección de Modelo ---
+        function selectModel(model) {
+            document.querySelectorAll('.model-btn').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+            
+            document.querySelectorAll('.control-group').forEach(c => c.classList.remove('active'));
+            
+            const svg = document.getElementById('krugmanSvg');
+            if(model === 'krugman') {
+                svg.style.display = 'block';
+                document.getElementById('krugman-controls').classList.add('active');
+            } else {
+                svg.style.display = 'none';
+            }
+        }
+
+        // --- Lógica Modelo de Krugman ---
+        function updateKrugman() {
+            const supY = parseInt(document.getElementById('bandSupSlider').value);
+            const infY = parseInt(document.getElementById('bandInfSlider').value);
+            const fundX = parseInt(document.getElementById('fundSlider').value);
+
+            document.getElementById('supVal').textContent = supY;
+            document.getElementById('infVal').textContent = infY;
+            document.getElementById('fundVal').textContent = fundX;
+
+            document.getElementById('bandSup').setAttribute('y1', supY);
+            document.getElementById('bandSup').setAttribute('y2', supY);
+            document.getElementById('bandInf').setAttribute('y1', infY);
+            document.getElementById('bandInf').setAttribute('y2', infY);
+
+            const centerY = 450 - fundX; 
+            const c1y = Math.min(Math.max(centerY, infY), supY);
+            
+            const adjustedPath = `M 50 ${infY} C 150 ${infY}, ${fundX-100} ${c1y}, ${fundX} ${c1y} S 450 ${supY}, 550 ${supY}`;
+            document.getElementById('krugmanPath').setAttribute('d', adjustedPath);
+
+            document.getElementById('eqPoint').setAttribute('cx', fundX);
+            document.getElementById('eqPoint').setAttribute('cy', c1y);
+        }
+
+        function triggerCrisis() {
+            document.getElementById('krugmanPath').setAttribute('d', 'M 50 450 L 550 50');
+            setTimeout(updateKrugman, 2000);
+        }
+
+        updateKrugman();
+
+        // --- Lógica de Grabación (Simulada) ---
+        let isRecording = false;
+        function toggleRecording() {
+            const btn = document.getElementById('recBtn');
+            const status = document.getElementById('recStatus');
+            isRecording = !isRecording;
+            
+            if(isRecording) {
+                btn.classList.add('recording');
+                status.textContent = "Grabando clase...";
+                status.style.color = "#dc3545";
+            } else {
+                btn.classList.remove('recording');
+                status.textContent = "Grabación detenida. Video listo en Campus.";
+                status.style.color = "#aaa";
+            }
+        }
+
+        function addMarker() {
+            if(!isRecording) {
+                alert("Inicia la grabación primero para añadir marcadores.");
+                return;
+            }
+            const status = document.getElementById('recStatus');
+            status.textContent = ">> Capítulo marcado en el video";
+            setTimeout(() => {
+                if(isRecording) status.textContent = "Grabando clase...";
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
